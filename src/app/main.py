@@ -1,8 +1,11 @@
 import asyncio
 import random
-import sys
 import time
+from enum import Enum, unique
 from pathlib import Path
+
+import typer
+import uvloop
 
 from src.app import work
 from src.app.async_task_runner import AsyncTaskRunner
@@ -11,32 +14,44 @@ from src.app.sync_task_runner import TaskRunner
 HTTP_CLIENTS = ["requests", "httpx", "aiohttp"]
 
 
-def main() -> None:
-    if len(sys.argv) > 1:
-        library = sys.argv[1]
-        if library not in HTTP_CLIENTS:
-            print(f"invalid library: {library}, use any from {HTTP_CLIENTS}")
-            sys.exit(1)
-    else:
-        print("no library specified")
-        sys.exit(1)
+@unique
+class Client(str, Enum):
+    requests = "requests"
+    httpx = "httpx"
+    aiohttp = "aiohttp"
 
+
+app = typer.Typer()
+
+
+@app.command()
+def main(
+    client: Client,
+    loops: int = 20,
+    runner_limit: int = 30,
+    timeout: float = 3.0,
+    use_uvloop: bool = False,
+    proxies_file: Path = Path("proxies.txt"),
+) -> None:
     start = time.perf_counter()
-    proxies = Path("proxies.txt").read_text().strip().splitlines()
-    loops = 20
-    runner_limit = 30
-    timeout = 3.0
+    proxies = proxies_file.read_text().strip().splitlines()
     if not proxies:
         print("No proxies found")
         return
 
-    match library:
-        case "requests":
+    match client:
+        case Client.requests:
             test_requests(loops, runner_limit, proxies, timeout)
-        case "httpx":
-            asyncio.run(test_httpx(loops, runner_limit, proxies, timeout))
-        case "aiohttp":
-            asyncio.run(test_aiohttp(loops, runner_limit, proxies, timeout))
+        case Client.httpx:
+            if use_uvloop:
+                uvloop.run(test_httpx(loops, runner_limit, proxies, timeout))
+            else:
+                asyncio.run(test_httpx(loops, runner_limit, proxies, timeout))
+        case Client.aiohttp:
+            if use_uvloop:
+                uvloop.run(test_aiohttp(loops, runner_limit, proxies, timeout))
+            else:
+                asyncio.run(test_aiohttp(loops, runner_limit, proxies, timeout))
 
     print(f"done: {time.perf_counter() - start}")
 
@@ -69,4 +84,4 @@ async def test_aiohttp(loops: int, runner_limit: int, proxies: list[str], timeou
 
 
 if __name__ == "__main__":
-    main()
+    app()

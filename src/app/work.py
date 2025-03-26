@@ -54,7 +54,6 @@ async def aiohttp_work(proxy: str, timeout: float) -> None:
     result, error = None, None
 
     try:
-
         # Ensure proxy has correct format
         if not proxy.startswith(("http://", "https://", "socks5://")):
             # Assume HTTP if no scheme specified
